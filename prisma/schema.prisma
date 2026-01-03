@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  walletAddress String         @unique @map("wallet_address")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  conversations Conversation[]
+  orders        Order[]
+
+  @@map("users")
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  messages  Message[]
+  orders    Order[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  role           String
+  content        String
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@map("messages")
+}
+
+model Order {
+  id                 String        @id @default(cuid())
+  userId             String        @map("user_id")
+  user               User          @relation(fields: [userId], references: [id])
+  conversationId     String?       @map("conversation_id")
+  conversation       Conversation? @relation(fields: [conversationId], references: [id])
+  productName        String        @map("product_name")
+  productImageUrl    String?       @map("product_image_url")
+  productUrl         String        @map("product_url")
+  price              Int
+  shippingPostalCode String        @map("shipping_postal_code")
+  shippingAddress    String        @map("shipping_address")
+  shippingName       String        @map("shipping_name")
+  txHash             String?       @map("tx_hash")
+  status             String        @default("pending")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId], map: "idx_orders_user_id")
+  @@index([status], map: "idx_orders_status")
+  @@index([createdAt(sort: Desc)], map: "idx_orders_created_at")
+  @@map("orders")
+}

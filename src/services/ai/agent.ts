@@ -3,10 +3,12 @@ import { generateText } from "ai";
 import { SYSTEM_PROMPT } from "./prompts";
 import { tools } from "./tools";
 import type { Product } from "@/types/product";
+import type { ChatAction } from "@/types/chat";
 
 interface AgentResponse {
   text: string;
   products?: Product[];
+  action?: ChatAction;
 }
 
 export async function chat(
@@ -30,6 +32,7 @@ export async function chat(
   });
 
   let products: Product[] | undefined;
+  let action: ChatAction | undefined;
 
   for (const step of result.steps) {
     for (const toolResult of step.toolResults) {
@@ -39,11 +42,36 @@ export async function chat(
       ) {
         products = toolResult.result.products;
       }
+      // prepareDepositツールからアクションを抽出
+      if (
+        toolResult.toolName === "prepareDeposit" &&
+        toolResult.result.success &&
+        toolResult.result.action
+      ) {
+        action = toolResult.result.action as ChatAction;
+      }
+      // prepareWithdrawツールからアクションを抽出
+      if (
+        toolResult.toolName === "prepareWithdraw" &&
+        toolResult.result.success &&
+        toolResult.result.action
+      ) {
+        action = toolResult.result.action as ChatAction;
+      }
+      // getAffordableProductsツールからも商品を抽出
+      if (
+        toolResult.toolName === "getAffordableProducts" &&
+        toolResult.result.success &&
+        toolResult.result.products
+      ) {
+        products = toolResult.result.products;
+      }
     }
   }
 
   return {
     text: result.text,
     products,
+    action,
   };
 }

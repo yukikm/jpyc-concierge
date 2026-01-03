@@ -4,10 +4,12 @@ import { useCallback } from "react";
 import { useChatStore } from "@/stores/chatStore";
 import type { ChatMessage } from "@/types/chat";
 import type { Product } from "@/types/product";
+import type { ChatAction } from "@/types/chat";
 
 interface ChatApiResponse {
   response: string;
   products?: Product[];
+  action?: ChatAction;
 }
 
 export function useChat() {
@@ -53,6 +55,7 @@ export function useChat() {
           role: "assistant",
           content: data.response,
           products: data.products,
+          action: data.action,
           createdAt: new Date(),
         };
 

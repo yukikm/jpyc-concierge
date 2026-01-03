@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Bot, User } from "lucide-react";
 import type { ChatMessage } from "@/types/chat";
 import ProductCard from "./ProductCard";
+import ChatActionRenderer from "@/components/actions";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -53,6 +54,17 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
               <ProductCard key={index} product={product} />
             ))}
           </div>
+        )}
+        {message.action && (
+          <ChatActionRenderer
+            action={message.action}
+            onSuccess={(txHash) => {
+              console.log("Transaction success:", txHash);
+            }}
+            onError={(error) => {
+              console.error("Transaction error:", error);
+            }}
+          />
         )}
       </div>
     </div>

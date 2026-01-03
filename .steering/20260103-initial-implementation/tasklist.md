@@ -9,10 +9,10 @@
 | 型定義 | 3 | 3 | 100% |
 | UIコンポーネント | 4 | 4 | 100% |
 | チャット機能 | 6 | 6 | 100% |
-| ウォレット接続 | 2 | 3 | 67% |
+| ウォレット接続 | 3 | 3 | 100% |
 | 商品検索 | 3 | 3 | 100% |
 | 管理者機能 | 4 | 4 | 100% |
-| **合計** | **29** | **31** | **94%** |
+| **合計** | **30** | **31** | **97%** |
 
 ---
 
@@ -61,7 +61,9 @@
 ## 6. ウォレット接続
 
 - [x] 6.1 Wagmi設定（lib/wagmi.ts）
-- [ ] 6.2 useWalletフック（Wagmiのフックを直接使用）
+- [x] 6.2 Wagmiフックを直接使用
+  - WalletButton: useAccount, useConnect, useDisconnect
+  - useSecuredFinance: usePublicClient, useWalletClient, useAccount
 - [x] 6.3 WalletButtonコンポーネント実装
 
 ## 7. 商品検索

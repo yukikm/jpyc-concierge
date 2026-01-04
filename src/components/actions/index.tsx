@@ -3,6 +3,8 @@
 import type { ChatAction } from "@/types/chat";
 import LendingAction from "./LendingAction";
 import WithdrawAction from "./WithdrawAction";
+import ClaimAction from "./ClaimAction";
+import PurchaseAction from "./PurchaseAction";
 
 interface ChatActionRendererProps {
   action: ChatAction;
@@ -32,16 +34,13 @@ export default function ChatActionRenderer({
           onError={onError}
         />
       );
+    case "claim":
+      return <ClaimAction action={action} />;
     case "purchase":
-      // TODO: PurchaseAction component
-      return (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-          購入機能は準備中です
-        </div>
-      );
+      return <PurchaseAction action={action} />;
     default:
       return null;
   }
 }
 
-export { LendingAction, WithdrawAction };
+export { LendingAction, WithdrawAction, ClaimAction, PurchaseAction };

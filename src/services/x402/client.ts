@@ -18,7 +18,7 @@ import { JPYC_ADDRESS } from "@/services/defi/constants";
 
 // Facilitator URL
 const FACILITATOR_URL =
-  process.env.X402_FACILITATOR_URL || "http://localhost:3002";
+  process.env.X402_FACILITATOR_URL || "http://localhost:4022";
 
 export class X402Client {
   private facilitatorUrl: string;

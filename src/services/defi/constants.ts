@@ -1,7 +1,10 @@
 // DeFi関連の定数
 
-// Sepolia Testnet
-export const CHAIN_ID = 11155111;
+// Chain ID（環境変数から取得、デフォルトはSepolia）
+export const CHAIN_ID = parseInt(
+  process.env.NEXT_PUBLIC_CHAIN_ID || "11155111",
+  10
+);
 
 // JPYC Token Address (Sepolia)
 // 実際のアドレスは環境変数で上書き可能

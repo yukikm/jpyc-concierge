@@ -3,7 +3,7 @@ import { Product } from "./product";
 export type MessageRole = "user" | "assistant";
 
 // アクションの種類
-export type ActionType = "lending" | "withdraw" | "purchase";
+export type ActionType = "lending" | "withdraw" | "claim" | "purchase";
 
 // レンディングアクションのパラメータ
 export interface LendingActionParams {
@@ -17,7 +17,7 @@ export interface LendingActionParams {
   side: number; // OrderSide.LEND = 0
 }
 
-// 引き出しアクションのパラメータ
+// 引き出しアクションのパラメータ（満期前の早期解約）
 export interface WithdrawActionParams {
   type: "withdraw";
   positionId: string;
@@ -31,19 +31,41 @@ export interface WithdrawActionParams {
   isMatured: boolean; // 満期済みかどうか
 }
 
+// 満期償還アクションのパラメータ（満期後の元本+利息受け取り）
+export interface ClaimActionParams {
+  type: "claim";
+  positionId: string;
+  maturity: number; // executeRedemptionに必要
+  principal: string; // 元本（wei）
+  principalDisplay: string; // "10,000 JPYC"
+  interest: string; // 利息（wei）
+  interestDisplay: string; // "500 JPYC"
+  total: string; // 合計（wei）
+  totalDisplay: string; // "10,500 JPYC"
+  maturityDate: string; // "2026/03/01"
+}
+
 // 購入アクションのパラメータ
 export interface PurchaseActionParams {
   type: "purchase";
-  productId: string;
   productName: string;
+  productImageUrl?: string;
+  productUrl: string;
   price: number;
   priceDisplay: string;
+  // 住所情報（住所ヒアリング完了後に追加される）
+  shippingPostalCode?: string;
+  shippingAddress?: string;
+  shippingName?: string;
+  // 決済状態
+  isReadyToPurchase: boolean;
 }
 
 // アクション統合型
 export type ChatAction =
   | LendingActionParams
   | WithdrawActionParams
+  | ClaimActionParams
   | PurchaseActionParams;
 
 export interface ChatMessage {

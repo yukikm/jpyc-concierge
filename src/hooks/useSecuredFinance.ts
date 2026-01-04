@@ -35,6 +35,7 @@ interface UseSecuredFinanceResult {
   error: string | null;
   placeOrder: (params: PlaceOrderParams) => Promise<string>;
   unwindPosition: (maturity: number) => Promise<string>;
+  executeRedemption: (maturity: number) => Promise<string>;
   getPositions: () => Promise<Position[]>;
   getJPYCBalance: () => Promise<bigint>;
   depositCollateral: (amount: bigint) => Promise<string>;
@@ -144,6 +145,27 @@ export function useSecuredFinance(): UseSecuredFinanceResult {
     [sfClient, isInitialized]
   );
 
+  // 満期償還（満期後の元本+利息受け取り）
+  const executeRedemption = useCallback(
+    async (maturity: number): Promise<string> => {
+      if (!sfClient || !isInitialized) {
+        throw new Error("SDK not initialized. Please connect your wallet.");
+      }
+
+      console.log("[useSecuredFinance] Executing redemption:", { maturity });
+
+      try {
+        const txHash = await sfClient.executeRedemption(JPYC_TOKEN, maturity);
+        console.log("[useSecuredFinance] Redemption executed, tx hash:", txHash);
+        return txHash;
+      } catch (err) {
+        console.error("[useSecuredFinance] executeRedemption failed:", err);
+        throw err;
+      }
+    },
+    [sfClient, isInitialized]
+  );
+
   // ポジション取得
   const getPositions = useCallback(async (): Promise<Position[]> => {
     if (!sfClient || !isInitialized || !address) {
@@ -238,6 +260,7 @@ export function useSecuredFinance(): UseSecuredFinanceResult {
     error,
     placeOrder,
     unwindPosition,
+    executeRedemption,
     getPositions,
     getJPYCBalance,
     depositCollateral,

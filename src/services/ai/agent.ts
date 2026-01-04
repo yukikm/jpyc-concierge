@@ -34,29 +34,23 @@ export async function chat(
   let products: Product[] | undefined;
   let action: ChatAction | undefined;
 
+  // ツール結果からアクションを抽出するツール名リスト
+  const actionTools = [
+    "prepareDeposit",
+    "prepareWithdraw",
+    "prepareClaim",
+    "startPurchase",
+    "confirmPurchase",
+  ];
+
   for (const step of result.steps) {
     for (const toolResult of step.toolResults) {
+      // 商品検索ツールから商品を抽出
       if (
         toolResult.toolName === "searchProducts" &&
         toolResult.result.success
       ) {
         products = toolResult.result.products;
-      }
-      // prepareDepositツールからアクションを抽出
-      if (
-        toolResult.toolName === "prepareDeposit" &&
-        toolResult.result.success &&
-        toolResult.result.action
-      ) {
-        action = toolResult.result.action as ChatAction;
-      }
-      // prepareWithdrawツールからアクションを抽出
-      if (
-        toolResult.toolName === "prepareWithdraw" &&
-        toolResult.result.success &&
-        toolResult.result.action
-      ) {
-        action = toolResult.result.action as ChatAction;
       }
       // getAffordableProductsツールからも商品を抽出
       if (
@@ -65,6 +59,16 @@ export async function chat(
         toolResult.result.products
       ) {
         products = toolResult.result.products;
+      }
+      // アクションを返すツールから抽出
+      if (
+        actionTools.includes(toolResult.toolName) &&
+        toolResult.result.success
+      ) {
+        const result = toolResult.result as { success: boolean; action?: ChatAction };
+        if (result.action) {
+          action = result.action;
+        }
       }
     }
   }

@@ -208,14 +208,13 @@ export const prepareDepositTool = tool({
 
 export const prepareWithdrawTool = tool({
   description:
-    "DeFiポジションの引き出し（早期解約）を準備します。getPositionsで取得したポジション情報を元に、引き出しアクションを返します。",
+    "DeFiポジションの早期引き出し（満期前の解約）を準備します。満期前のポジションのみ対象です。満期済みのポジションはprepareClaimを使用してください。",
   parameters: z.object({
     walletAddress: z.string().describe("ユーザーのウォレットアドレス"),
     maturity: z.number().describe("引き出すポジションの満期タイムスタンプ"),
   }),
   execute: async ({ walletAddress, maturity }) => {
     try {
-      // ポジション情報を取得
       const positions = await defiClient.getPositions(walletAddress);
       const position = positions.find((p) => Number(p.maturityDate.getTime() / 1000) === maturity || Math.abs(Number(p.maturityDate.getTime() / 1000) - maturity) < 86400);
 
@@ -234,11 +233,18 @@ export const prepareWithdrawTool = tool({
 
       const isMatured = position.maturityDate.getTime() < Date.now();
 
+      // 満期済みの場合はClaimを案内
+      if (isMatured) {
+        return {
+          success: false,
+          error: "このポジションは満期済みです。「利息を受け取りたい」と言っていただければ、満期償還を実行できます。",
+          action: null,
+        };
+      }
+
       return {
         success: true,
-        message: isMatured
-          ? `満期済みのポジション（${formatJPYC(position.principal)}）の引き出しを準備しました。`
-          : `運用中のポジション（${formatJPYC(position.principal)}）の早期引き出しを準備しました。満期前の解約には手数料がかかる場合があります。`,
+        message: `運用中のポジション（${formatJPYC(position.principal)}）の早期引き出しを準備しました。満期前の解約には手数料がかかる場合があります。`,
         action: {
           type: "withdraw" as const,
           positionId: position.id,
@@ -249,7 +255,7 @@ export const prepareWithdrawTool = tool({
           accruedInterest: position.accruedInterest.toString(),
           accruedInterestDisplay: formatJPYC(position.accruedInterest),
           maturityDate: position.maturityDate.toLocaleDateString("ja-JP"),
-          isMatured,
+          isMatured: false,
         },
       };
     } catch (error) {
@@ -263,6 +269,147 @@ export const prepareWithdrawTool = tool({
   },
 });
 
+export const prepareClaimTool = tool({
+  description:
+    "満期済みポジションの元本+利息の受け取り（満期償還）を準備します。ユーザーが「利息を受け取りたい」「満期になった」と言った時に使用します。",
+  parameters: z.object({
+    walletAddress: z.string().describe("ユーザーのウォレットアドレス"),
+    maturity: z.number().optional().describe("受け取るポジションの満期タイムスタンプ。省略時は満期済みポジションを自動選択"),
+  }),
+  execute: async ({ walletAddress, maturity }) => {
+    try {
+      const positions = await defiClient.getPositions(walletAddress);
+
+      // 満期済みポジションをフィルタ
+      const maturedPositions = positions.filter(
+        (p) => p.maturityDate.getTime() < Date.now()
+      );
+
+      if (maturedPositions.length === 0) {
+        return {
+          success: false,
+          error: "満期済みのポジションがありません。満期日まで運用を続けるか、早期引き出し（prepareWithdraw）をご利用ください。",
+          action: null,
+        };
+      }
+
+      // 特定のmaturityが指定されていればそれを選択、なければ最初の満期済みポジション
+      const position = maturity
+        ? maturedPositions.find((p) => Math.abs(Number(p.maturityDate.getTime() / 1000) - maturity) < 86400)
+        : maturedPositions[0];
+
+      if (!position) {
+        return {
+          success: false,
+          error: "指定されたポジションが見つかりませんでした。",
+          action: null,
+        };
+      }
+
+      const formatJPYC = (amount: bigint): string => {
+        const value = Number(amount / 10n ** 18n);
+        return `${value.toLocaleString("ja-JP")} JPYC`;
+      };
+
+      const total = position.principal + position.accruedInterest;
+
+      return {
+        success: true,
+        message: `満期を迎えたポジションがあります！元本 ${formatJPYC(position.principal)} + 利息 ${formatJPYC(position.accruedInterest)} = 合計 ${formatJPYC(total)} を受け取れます。`,
+        action: {
+          type: "claim" as const,
+          positionId: position.id,
+          maturity: Math.floor(position.maturityDate.getTime() / 1000),
+          principal: position.principal.toString(),
+          principalDisplay: formatJPYC(position.principal),
+          interest: position.accruedInterest.toString(),
+          interestDisplay: formatJPYC(position.accruedInterest),
+          total: total.toString(),
+          totalDisplay: formatJPYC(total),
+          maturityDate: position.maturityDate.toLocaleDateString("ja-JP"),
+        },
+      };
+    } catch (error) {
+      console.error("Prepare claim error:", error);
+      return {
+        success: false,
+        error: "受け取り準備に失敗しました。",
+        action: null,
+      };
+    }
+  },
+});
+
+export const startPurchaseTool = tool({
+  description:
+    "商品の購入フローを開始します。ユーザーが「これを買いたい」「購入したい」と言った時に使用します。住所のヒアリングを開始し、商品情報を保持します。",
+  parameters: z.object({
+    productName: z.string().describe("商品名"),
+    productImageUrl: z.string().optional().describe("商品画像URL"),
+    productUrl: z.string().describe("商品ページURL（楽天市場）"),
+    price: z.number().describe("商品価格（円/JPYC）"),
+  }),
+  execute: async ({ productName, productImageUrl, productUrl, price }) => {
+    return {
+      success: true,
+      message: `「${productName}」（${price.toLocaleString()}円）のご購入ですね。お届け先の情報を教えてください。\n\n以下の情報をお願いします：\n1. お名前（届け先の氏名）\n2. 郵便番号\n3. 住所`,
+      action: {
+        type: "purchase" as const,
+        productName,
+        productImageUrl,
+        productUrl,
+        price,
+        priceDisplay: `${price.toLocaleString()} JPYC`,
+        isReadyToPurchase: false,
+      },
+      awaitingShippingInfo: true,
+    };
+  },
+});
+
+export const confirmPurchaseTool = tool({
+  description:
+    "住所情報を受け取り、購入の最終確認を行います。ユーザーが住所情報を提供した後に使用します。",
+  parameters: z.object({
+    productName: z.string().describe("商品名"),
+    productImageUrl: z.string().optional().describe("商品画像URL"),
+    productUrl: z.string().describe("商品ページURL"),
+    price: z.number().describe("商品価格（円/JPYC）"),
+    shippingName: z.string().describe("届け先氏名"),
+    shippingPostalCode: z.string().describe("郵便番号（ハイフンなし7桁）"),
+    shippingAddress: z.string().describe("住所（都道府県から番地まで）"),
+  }),
+  execute: async ({
+    productName,
+    productImageUrl,
+    productUrl,
+    price,
+    shippingName,
+    shippingPostalCode,
+    shippingAddress,
+  }) => {
+    // 郵便番号のフォーマット（ハイフンなしに統一）
+    const formattedPostalCode = shippingPostalCode.replace(/-/g, "");
+
+    return {
+      success: true,
+      message: `ご注文内容を確認してください：\n\n商品: ${productName}\n金額: ${price.toLocaleString()} JPYC\n\nお届け先:\n${shippingName} 様\n〒${formattedPostalCode}\n${shippingAddress}\n\nよろしければ「購入する」ボタンを押してください。`,
+      action: {
+        type: "purchase" as const,
+        productName,
+        productImageUrl,
+        productUrl,
+        price,
+        priceDisplay: `${price.toLocaleString()} JPYC`,
+        shippingName,
+        shippingPostalCode: formattedPostalCode,
+        shippingAddress,
+        isReadyToPurchase: true,
+      },
+    };
+  },
+});
+
 export const tools = {
   searchProducts: searchProductsTool,
   getLendingRates: getLendingRatesTool,
@@ -270,4 +417,7 @@ export const tools = {
   getAffordableProducts: getAffordableProductsTool,
   prepareDeposit: prepareDepositTool,
   prepareWithdraw: prepareWithdrawTool,
+  prepareClaim: prepareClaimTool,
+  startPurchase: startPurchaseTool,
+  confirmPurchase: confirmPurchaseTool,
 };

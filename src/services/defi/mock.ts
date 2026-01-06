@@ -75,8 +75,17 @@ export function toPositionDisplay(position: Position): PositionDisplay {
   };
 }
 
+// 通貨に応じた金額フォーマット
+function formatAmount(amount: bigint, currency: string): string {
+  if (currency === "USDC") {
+    const value = Number(amount / 10n ** 6n);
+    return `${new Intl.NumberFormat("ja-JP").format(value)} USDC`;
+  }
+  return `${formatJPYC(amount)} JPYC`;
+}
+
 // LendingRate を表示用に変換
-export function toLendingRateDisplay(rate: LendingRate): LendingRateDisplay {
+export function toLendingRateDisplay(rate: LendingRate, currency: string = "JPYC"): LendingRateDisplay {
   const now = new Date();
   const maturityDate = new Date(rate.maturityDate);
   const daysUntilMaturity = Math.ceil(
@@ -86,7 +95,7 @@ export function toLendingRateDisplay(rate: LendingRate): LendingRateDisplay {
   return {
     maturityDate: maturityDate.toLocaleDateString("ja-JP"),
     apy: `${rate.apy.toFixed(1)}%`,
-    minAmount: `${formatJPYC(rate.minAmount)} JPYC`,
+    minAmount: formatAmount(rate.minAmount, currency),
     daysUntilMaturity,
   };
 }

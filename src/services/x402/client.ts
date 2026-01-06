@@ -4,8 +4,9 @@
 import type {
   TransferAuthParams,
   SignedAuthorization,
-  FacilitatorRequest,
-  FacilitatorResponse,
+  PaymentPayload,
+  PaymentRequirements,
+  SettleResponse,
   TransferResult,
 } from "./types";
 import {
@@ -15,6 +16,17 @@ import {
   splitSignature,
 } from "./eip712";
 import { JPYC_ADDRESS } from "@/services/defi/constants";
+
+// x402 constants
+// Sepolia (eip155:11155111) supports x402Version 2
+const X402_VERSION = 2;
+const SCHEME = "exact";
+const NETWORK = "eip155:11155111";
+
+// EIP-712 domain info for JPYC token
+// FiatTokenV1実装コントラクトのVERSIONは"1"
+const EIP712_DOMAIN_NAME = "JPY Coin";
+const EIP712_DOMAIN_VERSION = "1";
 
 // Facilitator URL
 const FACILITATOR_URL =
@@ -71,31 +83,79 @@ export class X402Client {
   }
 
   /**
-   * Facilitator経由で送金を実行
+   * PaymentRequirementsを構築
+   * extra に EIP-712 domain info (name, version) を含める
+   */
+  buildPaymentRequirements(
+    payTo: `0x${string}`,
+    amount: bigint
+  ): PaymentRequirements {
+    return {
+      scheme: SCHEME,
+      network: NETWORK,
+      asset: JPYC_ADDRESS,
+      amount: amount.toString(),
+      payTo,
+      maxTimeoutSeconds: 30,
+      extra: {
+        name: EIP712_DOMAIN_NAME,
+        version: EIP712_DOMAIN_VERSION,
+      },
+    };
+  }
+
+  /**
+   * PaymentPayloadを構築 (x402 v2形式)
+   */
+  buildPaymentPayload(
+    signedAuth: SignedAuthorization,
+    resourceUrl: string = "https://jpyc-concierge.local/transfer"
+  ): PaymentPayload {
+    const paymentRequirements = this.buildPaymentRequirements(
+      signedAuth.params.to,
+      signedAuth.params.value
+    );
+
+    return {
+      x402Version: X402_VERSION,
+      resource: {
+        url: resourceUrl,
+        method: "POST",
+      },
+      accepted: paymentRequirements,
+      payload: {
+        signature: signedAuth.signature,
+        authorization: {
+          from: signedAuth.params.from,
+          to: signedAuth.params.to,
+          value: signedAuth.params.value.toString(),
+          validAfter: signedAuth.params.validAfter.toString(),
+          validBefore: signedAuth.params.validBefore.toString(),
+          nonce: signedAuth.params.nonce,
+        },
+      },
+    };
+  }
+
+  /**
+   * Facilitator経由で送金を実行 (x402 /settle)
    */
   async executeTransfer(
     signedAuth: SignedAuthorization
   ): Promise<TransferResult> {
-    const request: FacilitatorRequest = {
-      tokenAddress: JPYC_ADDRESS,
-      from: signedAuth.params.from,
-      to: signedAuth.params.to,
-      value: signedAuth.params.value.toString(),
-      validAfter: signedAuth.params.validAfter.toString(),
-      validBefore: signedAuth.params.validBefore.toString(),
-      nonce: signedAuth.params.nonce,
-      v: signedAuth.v,
-      r: signedAuth.r,
-      s: signedAuth.s,
-    };
+    const paymentPayload = this.buildPaymentPayload(signedAuth);
+    const paymentRequirements = this.buildPaymentRequirements(
+      signedAuth.params.to,
+      signedAuth.params.value
+    );
 
     try {
-      const response = await fetch(`${this.facilitatorUrl}/transfer`, {
+      const response = await fetch(`${this.facilitatorUrl}/settle`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(request),
+        body: JSON.stringify({ paymentPayload, paymentRequirements }),
       });
 
       if (!response.ok) {
@@ -106,14 +166,14 @@ export class X402Client {
         };
       }
 
-      const result: FacilitatorResponse = await response.json();
+      const result: SettleResponse = await response.json();
       return {
         success: result.success,
         txHash: result.txHash,
-        error: result.error,
+        error: result.errorReason,
       };
     } catch (error) {
-      console.error("x402 transfer error:", error);
+      console.error("x402 settle error:", error);
       return {
         success: false,
         error:
@@ -125,11 +185,11 @@ export class X402Client {
   }
 
   /**
-   * Facilitatorの状態を確認
+   * Facilitatorの状態を確認 (x402 /supported)
    */
   async checkFacilitatorHealth(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.facilitatorUrl}/health`, {
+      const response = await fetch(`${this.facilitatorUrl}/supported`, {
         method: "GET",
       });
       return response.ok;

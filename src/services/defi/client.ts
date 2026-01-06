@@ -3,7 +3,7 @@
 
 import { SecuredFinanceClient, OrderSide, WalletSource } from "@secured-finance/sf-client";
 import { Token } from "@secured-finance/sf-core";
-import { createPublicClient, http, type PublicClient, type WalletClient } from "viem";
+import { createPublicClient, http, type PublicClient } from "viem";
 import { sepolia } from "viem/chains";
 import type {
   Position,
@@ -21,17 +21,27 @@ import {
   toLendingRateDisplay,
   mockDelay,
 } from "./mock";
-import { JPYC_DECIMALS, formatJPYC } from "./constants";
+import { JPYC_DECIMALS, USDC_DECIMALS, formatJPYC } from "./constants";
 
-// JPYC Token定義
-const JPYC_TOKEN = new Token(JPYC_DECIMALS, "JPYC", "JPY Coin", true, "1");
+// 通貨タイプ
+type CurrencyType = "JPYC" | "USDC";
+
+// Token定義（secured.finance staging環境用）
+// hasPermit=true, eip712Version="2" はEIP-3009対応
+const JPYC_TOKEN = new Token(JPYC_DECIMALS, "JPYC", "JPY Coin", true, "2");
+const USDC_TOKEN = new Token(USDC_DECIMALS, "USDC", "USD Coin", true, "2");
+
+// 通貨に対応するTokenを取得
+const getTokenForCurrency = (currency: CurrencyType): Token => {
+  return currency === "USDC" ? USDC_TOKEN : JPYC_TOKEN;
+};
 
 // SF_ENV環境変数の設定（SDK要件）
 // クライアントサイドでは process.env は build時に評価される
 const SF_ENV = process.env.NEXT_PUBLIC_SF_ENV || "staging";
 
-// SDK利用可能かどうかをチェック
-const isSDKAvailable = true;
+// SDK利用可能かどうかをチェック（将来的にSDKの可用性チェックを追加予定）
+// const isSDKAvailable = true;
 
 export class DefiClient {
   private sfClient: SecuredFinanceClient | null = null;
@@ -85,13 +95,16 @@ export class DefiClient {
   /**
    * 現在のレンディングレートを取得
    */
-  async getLendingRates(): Promise<LendingRate[]> {
+  async getLendingRates(currency: CurrencyType = "USDC"): Promise<LendingRate[]> {
     await this.ensureInitialized();
+
+    const token = getTokenForCurrency(currency);
+    const minAmount = currency === "USDC" ? 10n * 10n ** 6n : 1000n * 10n ** 18n;
 
     if (this.isSDKReady() && this.sfClient) {
       try {
         // OrderBookの詳細を取得（レンディングレートを含む）
-        const orderBooks = await this.sfClient.getOrderBookDetailsPerCurrency(JPYC_TOKEN);
+        const orderBooks = await this.sfClient.getOrderBookDetailsPerCurrency(token);
 
         const rates: LendingRate[] = orderBooks
           .filter((book) => !book.isMatured && book.isOpened)
@@ -113,31 +126,35 @@ export class DefiClient {
             return {
               maturityDate: new Date(maturityTimestamp * 1000),
               apy: Math.max(0, apy),
-              minAmount: 1000n * 10n ** 18n, // 最小1000 JPYC
+              minAmount,
             };
           });
 
         if (rates.length > 0) {
-          console.log(`[DefiClient] Retrieved ${rates.length} lending rates from SDK`);
+          console.log(`[DefiClient] Retrieved ${rates.length} ${currency} lending rates from SDK`);
           return rates;
         }
       } catch (error) {
-        console.error("[DefiClient] Failed to get lending rates from SDK:", error);
+        console.error(`[DefiClient] Failed to get ${currency} lending rates from SDK:`, error);
       }
     }
 
-    // フォールバック: モックデータ
-    console.log("[DefiClient] Using mock lending rates");
+    // フォールバック: モックデータ（通貨に応じてminAmountを調整）
+    console.log(`[DefiClient] Using mock lending rates for ${currency}`);
     await mockDelay();
-    return mockLendingRates;
+    const mockMinAmount = currency === "USDC" ? 10n * 10n ** 6n : 1000n * 10n ** 18n;
+    return mockLendingRates.map((rate) => ({
+      ...rate,
+      minAmount: mockMinAmount,
+    }));
   }
 
   /**
    * レンディングレートを表示用に取得
    */
-  async getLendingRatesDisplay(): Promise<LendingRateDisplay[]> {
-    const rates = await this.getLendingRates();
-    return rates.map(toLendingRateDisplay);
+  async getLendingRatesDisplay(currency: CurrencyType = "USDC"): Promise<LendingRateDisplay[]> {
+    const rates = await this.getLendingRates(currency);
+    return rates.map((rate) => toLendingRateDisplay(rate, currency));
   }
 
   /**
@@ -339,6 +356,7 @@ export class DefiClient {
   async getLendingOrderParams(params: {
     amount: bigint;
     maturityMonths: number;
+    currency?: CurrencyType;
   }): Promise<{
     success: boolean;
     currency: string;
@@ -352,10 +370,13 @@ export class DefiClient {
   }> {
     await this.ensureInitialized();
 
+    const currency = params.currency || "USDC";
+    const token = getTokenForCurrency(currency);
+
     if (!this.isSDKReady() || !this.sfClient) {
       return {
         success: false,
-        currency: "JPYC",
+        currency,
         maturity: 0,
         side: OrderSide.LEND,
         amount: params.amount.toString(),
@@ -368,10 +389,10 @@ export class DefiClient {
 
     try {
       // 利用可能な満期を取得
-      const maturities = await this.sfClient.getMaturities(JPYC_TOKEN);
+      const maturities = await this.sfClient.getMaturities(token);
 
       if (maturities.length === 0) {
-        throw new Error("No available maturities");
+        throw new Error(`No available maturities for ${currency}`);
       }
 
       // 指定した月数に最も近い満期を選択
@@ -385,7 +406,7 @@ export class DefiClient {
 
       // OrderBookの詳細を取得してベストプライスを確認
       const orderBookDetail = await this.sfClient.getOrderBookDetail(
-        JPYC_TOKEN,
+        token,
         Number(selectedMaturity)
       );
 
@@ -401,11 +422,11 @@ export class DefiClient {
         apy = discountRate * (365 / daysToMaturity) * 100;
       }
 
-      console.log(`[DefiClient] Lending params: maturity=${selectedMaturity}, unitPrice=${unitPrice}, apy=${apy.toFixed(2)}%`);
+      console.log(`[DefiClient] ${currency} Lending params: maturity=${selectedMaturity}, unitPrice=${unitPrice}, apy=${apy.toFixed(2)}%`);
 
       return {
         success: true,
-        currency: "JPYC",
+        currency,
         maturity: Number(selectedMaturity),
         side: OrderSide.LEND,
         amount: params.amount.toString(),
@@ -414,10 +435,10 @@ export class DefiClient {
         maturityDate: new Date(maturityTimestamp * 1000).toLocaleDateString("ja-JP"),
       };
     } catch (error) {
-      console.error("[DefiClient] Failed to get lending order params:", error);
+      console.error(`[DefiClient] Failed to get ${currency} lending order params:`, error);
       return {
         success: false,
-        currency: "JPYC",
+        currency,
         maturity: 0,
         side: OrderSide.LEND,
         amount: params.amount.toString(),

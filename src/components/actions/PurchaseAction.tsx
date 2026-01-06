@@ -74,7 +74,8 @@ export default function PurchaseAction({ action }: PurchaseActionProps) {
       const { typedData, params } = prepareResult;
 
       // EIP-712署名（walletClientを直接使用）
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // EIP-712のTypedDataは動的な構造のため、型キャストが必要
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       const signature = await walletClient.signTypedData({
         account: address,
         domain: typedData.domain as any,
@@ -82,6 +83,7 @@ export default function PurchaseAction({ action }: PurchaseActionProps) {
         primaryType: "TransferWithAuthorization" as const,
         message: typedData.message as any,
       });
+      /* eslint-enable @typescript-eslint/no-explicit-any */
 
       setStatus("executing");
 

@@ -71,7 +71,8 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 初回マウント時のみ実行
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900">

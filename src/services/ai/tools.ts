@@ -35,15 +35,18 @@ export const searchProductsTool = tool({
 
 export const getLendingRatesTool = tool({
   description:
-    "現在のJPYCレンディングレート（年利）を取得します。ユーザーが運用を検討している時に使用します。",
-  parameters: z.object({}),
-  execute: async () => {
+    "現在のレンディングレート（年利）を取得します。ユーザーが運用を検討している時に使用します。secured.financeではUSDCで運用できます。USDCを運用したい場合はcurrency='USDC'を指定してください。",
+  parameters: z.object({
+    currency: z.enum(["USDC", "JPYC"]).optional().describe("通貨（デフォルト: USDC）。USDCを運用したい場合は必ず'USDC'を指定"),
+  }),
+  execute: async ({ currency = "USDC" }) => {
     try {
-      const rates = await defiClient.getLendingRatesDisplay();
+      const rates = await defiClient.getLendingRatesDisplay(currency);
       return {
         success: true,
         rates,
-        message: `${rates.length}件のレンディングオプションがあります。`,
+        currency,
+        message: `${currency}の${rates.length}件のレンディングオプションがあります。`,
       };
     } catch (error) {
       console.error("Get lending rates error:", error);
@@ -140,18 +143,23 @@ export const getAffordableProductsTool = tool({
 
 export const prepareDepositTool = tool({
   description:
-    "DeFi預け入れ（運用開始）の準備をします。金額と期間を指定します。ユーザーが「運用したい」「預けたい」と言った時に使用します。",
+    "DeFi預け入れ（運用開始）の準備をします。金額と期間、通貨を指定します。ユーザーが「運用したい」「預けたい」と言った時に使用します。デフォルトはUSDCです。",
   parameters: z.object({
-    amount: z.number().describe("預け入れ金額（JPYC）"),
+    amount: z.number().describe("預け入れ金額"),
     maturityMonths: z.number().describe("運用期間（月）。3, 6, 9, 12から選択"),
+    currency: z.enum(["USDC", "JPYC"]).optional().describe("通貨（デフォルト: USDC）"),
   }),
-  execute: async ({ amount, maturityMonths }) => {
+  execute: async ({ amount, maturityMonths, currency = "USDC" }) => {
     try {
+      // 通貨に応じた小数点桁数
+      const decimals = currency === "USDC" ? 6n : 18n;
+      const amountInSmallestUnit = BigInt(amount) * 10n ** decimals;
+
       // SDKからレンディングパラメータを取得
-      const amountWei = BigInt(amount) * 10n ** 18n;
       const lendingParams = await defiClient.getLendingOrderParams({
-        amount: amountWei,
+        amount: amountInSmallestUnit,
         maturityMonths,
+        currency,
       });
 
       if (!lendingParams.success) {
@@ -160,18 +168,19 @@ export const prepareDepositTool = tool({
         maturityDate.setMonth(maturityDate.getMonth() + maturityMonths);
         const maturityTimestamp = Math.floor(maturityDate.getTime() / 1000);
 
-        const rates = await defiClient.getLendingRatesDisplay();
+        const rates = await defiClient.getLendingRatesDisplay(currency);
         const matchingRate = rates.find(
           (r) => r.daysUntilMaturity >= maturityMonths * 28
         );
 
         return {
           success: true,
-          message: `${amount.toLocaleString()} JPYCを${maturityMonths}ヶ月運用する準備ができました。下のボタンをクリックして実行してください。`,
+          message: `${amount.toLocaleString()} ${currency}を${maturityMonths}ヶ月運用する準備ができました。下のボタンをクリックして実行してください。`,
           action: {
             type: "lending" as const,
-            amount: amountWei.toString(),
-            amountDisplay: `${amount.toLocaleString()} JPYC`,
+            currency: currency as "USDC" | "JPYC",
+            amount: amountInSmallestUnit.toString(),
+            amountDisplay: `${amount.toLocaleString()} ${currency}`,
             maturity: maturityTimestamp,
             maturityDate: maturityDate.toLocaleDateString("ja-JP"),
             unitPrice: 9500, // デフォルト値
@@ -183,11 +192,12 @@ export const prepareDepositTool = tool({
 
       return {
         success: true,
-        message: `${amount.toLocaleString()} JPYCを${maturityMonths}ヶ月運用する準備ができました。予想年利は${lendingParams.estimatedApy.toFixed(1)}%です。下のボタンをクリックして実行してください。`,
+        message: `${amount.toLocaleString()} ${currency}を${maturityMonths}ヶ月運用する準備ができました。予想年利は${lendingParams.estimatedApy.toFixed(1)}%です。下のボタンをクリックして実行してください。`,
         action: {
           type: "lending" as const,
+          currency: currency as "USDC" | "JPYC",
           amount: lendingParams.amount,
-          amountDisplay: `${amount.toLocaleString()} JPYC`,
+          amountDisplay: `${amount.toLocaleString()} ${currency}`,
           maturity: lendingParams.maturity,
           maturityDate: lendingParams.maturityDate,
           unitPrice: lendingParams.unitPrice,
@@ -342,26 +352,18 @@ export const prepareClaimTool = tool({
 
 export const startPurchaseTool = tool({
   description:
-    "商品の購入フローを開始します。ユーザーが「これを買いたい」「購入したい」と言った時に使用します。住所のヒアリングを開始し、商品情報を保持します。",
+    "商品の購入フローを開始します。ユーザーが「これを買いたい」「購入したい」と言った時に使用します。住所のヒアリングを開始します。actionは返さず、チャットで住所を聞いてください。",
   parameters: z.object({
     productName: z.string().describe("商品名"),
     productImageUrl: z.string().optional().describe("商品画像URL"),
     productUrl: z.string().describe("商品ページURL（楽天市場）"),
     price: z.number().describe("商品価格（円/JPYC）"),
   }),
-  execute: async ({ productName, productImageUrl, productUrl, price }) => {
+  execute: async ({ productName, price }) => {
+    // actionは返さない。AIがチャットで住所を聞き、confirmPurchaseで初めてUIを表示する
     return {
       success: true,
-      message: `「${productName}」（${price.toLocaleString()}円）のご購入ですね。お届け先の情報を教えてください。\n\n以下の情報をお願いします：\n1. お名前（届け先の氏名）\n2. 郵便番号\n3. 住所`,
-      action: {
-        type: "purchase" as const,
-        productName,
-        productImageUrl,
-        productUrl,
-        price,
-        priceDisplay: `${price.toLocaleString()} JPYC`,
-        isReadyToPurchase: false,
-      },
+      message: `「${productName}」（${price.toLocaleString()}円）のご購入ですね。お届け先の情報を教えてください。\n\n以下の情報をお願いします：\n・お名前（届け先の氏名）\n・郵便番号\n・住所`,
       awaitingShippingInfo: true,
     };
   },

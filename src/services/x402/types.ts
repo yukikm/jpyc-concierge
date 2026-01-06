@@ -19,21 +19,62 @@ export interface SignedAuthorization {
   s: `0x${string}`;
 }
 
-// Facilitatorへのリクエスト
-export interface FacilitatorRequest {
-  tokenAddress: `0x${string}`;
-  from: `0x${string}`;
-  to: `0x${string}`;
-  value: string; // bigintをstring化
-  validAfter: string;
-  validBefore: string;
-  nonce: string;
-  v: number;
-  r: string;
-  s: string;
+// x402 ResourceInfo
+export interface ResourceInfo {
+  url: string;
+  method?: string;
 }
 
-// Facilitatorからのレスポンス
+// x402 PaymentRequirements
+export interface PaymentRequirements {
+  scheme: string;
+  network: string;
+  asset: string;
+  amount: string;
+  payTo: `0x${string}`;
+  maxTimeoutSeconds: number;
+  extra?: Record<string, unknown>;
+}
+
+// x402 PaymentPayload (v2)
+export interface PaymentPayload {
+  x402Version: number;
+  resource: ResourceInfo;
+  accepted: PaymentRequirements;
+  payload: {
+    signature: `0x${string}`;
+    authorization: {
+      from: `0x${string}`;
+      to: `0x${string}`;
+      value: string;
+      validAfter: string;
+      validBefore: string;
+      nonce: `0x${string}`;
+    };
+  };
+}
+
+// Facilitator /settle リクエスト
+export interface SettleRequest {
+  paymentPayload: PaymentPayload;
+  paymentRequirements: PaymentRequirements;
+}
+
+// Facilitator /settle レスポンス
+export interface SettleResponse {
+  success: boolean;
+  txHash?: `0x${string}`;
+  network?: string;
+  errorReason?: string;
+}
+
+// Facilitator /verify レスポンス
+export interface VerifyResponse {
+  isValid: boolean;
+  invalidReason?: string;
+}
+
+// Facilitatorからのレスポンス（後方互換）
 export interface FacilitatorResponse {
   success: boolean;
   txHash?: string;

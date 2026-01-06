@@ -53,7 +53,7 @@ interface UseDefiReturn {
 
 export function useDefi(): UseDefiReturn {
   const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
+  useWalletClient(); // 将来的にトランザクション実行で使用
   const [positions, setPositions] = useState<PositionDisplay[]>([]);
   const [rates, setRates] = useState<LendingRateDisplay[]>([]);
   const [totalInterest, setTotalInterest] = useState("0 JPYC");

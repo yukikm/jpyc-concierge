@@ -6,6 +6,7 @@ import type {
 import { JPYC_ADDRESS, CHAIN_ID } from "@/services/defi/constants";
 
 // JPYC Token情報（EIP-712 domain用）
+// FiatTokenV1実装コントラクトのVERSIONは"1"
 const JPYC_NAME = "JPY Coin";
 const JPYC_VERSION = "1";
 

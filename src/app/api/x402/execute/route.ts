@@ -37,16 +37,17 @@ export async function POST(request: NextRequest) {
       s,
     };
 
-    // Facilitatorの状態を確認
+    // Facilitatorの状態を確認 (x402 /supported)
     const facilitatorHealthy = await x402Client.checkFacilitatorHealth();
 
     let result;
     if (facilitatorHealthy) {
-      // 実際のFacilitator経由で実行
+      // 実際のFacilitator経由で実行 (x402 /settle)
+      console.log("[x402] Using Facilitator /settle endpoint");
       result = await x402Client.executeTransfer(signedAuth);
     } else {
       // モック実行（開発用）
-      console.log("[x402] Facilitator not available, using mock");
+      console.log("[x402] Facilitator /supported not available, using mock");
       result = await mockExecuteTransfer(signedAuth);
     }
 

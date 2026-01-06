@@ -16,9 +16,15 @@ export default function ChatContainer({
   onSendMessage,
 }: ChatContainerProps) {
   return (
-    <div className="flex h-full flex-col">
-      <MessageList messages={messages} isLoading={isLoading} />
-      <ChatInput onSend={onSendMessage} disabled={isLoading} />
+    <div className="flex h-full min-h-0 flex-col">
+      {/* メッセージリスト（スクロール可能領域） */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <MessageList messages={messages} isLoading={isLoading} />
+      </div>
+      {/* 入力フォーム（下部固定） */}
+      <div className="shrink-0">
+        <ChatInput onSend={onSendMessage} disabled={isLoading} />
+      </div>
     </div>
   );
 }

@@ -9,9 +9,9 @@ export default function Home() {
   const { messages, isLoading, sendMessage } = useChat();
 
   return (
-    <div className="flex min-h-screen flex-col bg-white dark:bg-zinc-950">
+    <div className="flex h-screen flex-col overflow-hidden bg-white dark:bg-zinc-950">
       <Header walletButton={<WalletButton />} />
-      <main className="flex flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col">
         <ChatContainer
           messages={messages}
           isLoading={isLoading}

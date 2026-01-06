@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Bot } from "lucide-react";
 import MessageBubble from "./MessageBubble";
@@ -20,11 +19,12 @@ export default function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // 最下部へスクロール
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
   return (
-    <ScrollArea className="flex-1 p-4">
+    <div className="p-4">
       <div className="flex flex-col gap-4">
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />
@@ -43,6 +43,6 @@ export default function MessageList({
         )}
         <div ref={bottomRef} />
       </div>
-    </ScrollArea>
+    </div>
   );
 }

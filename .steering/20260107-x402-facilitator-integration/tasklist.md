@@ -30,6 +30,8 @@
 - [x] AIアイコンのローディングアニメーション削除
 - [x] 黄色の住所入力カード削除（confirmPurchaseのみUIカード表示）
 - [x] ウォレット接続確認プロンプト削除
+- [x] Next.js開発ツールバー非表示 (`devIndicators: false`)
+- [x] チャット入力フォームを画面下部に固定
 
 ## 発生した問題と解決
 
@@ -67,10 +69,13 @@
 | `src/services/x402/types.ts` | PaymentPayload v2型定義 |
 | `src/services/defi/constants.ts` | JPYCアドレス更新 |
 | `src/components/chat/ChatInput.tsx` | Cmd+Enter送信 |
-| `src/components/chat/MessageList.tsx` | ローディングアニメーション修正 |
+| `src/components/chat/MessageList.tsx` | ローディングアニメーション修正、スクロール改善 |
+| `src/components/chat/ChatContainer.tsx` | 入力フォーム下部固定レイアウト |
 | `src/services/ai/prompts.ts` | 購入フローガイドライン更新 |
 | `src/services/ai/tools.ts` | startPurchaseからaction削除 |
 | `src/components/actions/PurchaseAction.tsx` | 購入フローUI |
+| `src/app/page.tsx` | h-screen固定レイアウト |
+| `next.config.ts` | devIndicators: false 追加 |
 
 ## 検証結果
 

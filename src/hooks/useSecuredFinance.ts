@@ -14,9 +14,11 @@ import { Token } from "@secured-finance/sf-core";
 export type CurrencyType = "JPYC" | "USDC";
 
 // フォールバック用Token定義（SDKから取得できない場合に使用）
+// hasPermit: false にすることで、depositWithPermitTo ではなく approve + deposit を使用
+// （permitを使うとSDKのガス推定に問題があるため）
 const FALLBACK_TOKENS: Record<CurrencyType, Token> = {
-  USDC: new Token(6, "USDC", "USD Coin", true, "2"),
-  JPYC: new Token(18, "JPYC", "JPY Coin", true, "2"),
+  USDC: new Token(6, "USDC", "USD Coin", false),
+  JPYC: new Token(18, "JPYC", "JPY Coin", false),
 };
 
 interface PlaceOrderParams {
@@ -95,7 +97,18 @@ export function useSecuredFinance(): UseSecuredFinanceResult {
         const client = new SecuredFinanceClient();
 
         console.log("[useSecuredFinance] Calling client.init()...");
-        await client.init(publicClient, walletClient);
+        console.log("[useSecuredFinance] SF_ENV:", process.env.SF_ENV, "NEXT_PUBLIC_SF_ENV:", process.env.NEXT_PUBLIC_SF_ENV);
+        // ガスリミットをネットワーク上限以下に設定（Sepoliaの上限は約16M）
+        await client.init(publicClient, walletClient, {
+          defaultGas: 500000,
+        });
+
+        // SDK設定を確認
+        console.log("[useSecuredFinance] SDK config:", {
+          env: client.config.env,
+          network: client.config.network,
+          networkId: client.config.networkId,
+        });
 
         // SDKから登録済み通貨アドレスを取得し、実際のトークン情報を読み取る
         const newCurrencyMap = new Map<CurrencyType, Token>();
@@ -128,12 +141,13 @@ export function useSecuredFinance(): UseSecuredFinanceResult {
               if (symbol === "USDC" || symbol === "JPYC") {
                 const currencyType = symbol as CurrencyType;
                 // SDKが認識するTokenオブジェクトを作成
+                // hasPermit: false にすることで、approve + deposit フローを使用
+                // （permitを使うとSDKのガス推定に問題があるため）
                 const token = new Token(
                   decimals,
                   symbol,
                   symbol === "USDC" ? "USD Coin" : "JPY Coin",
-                  true,
-                  "2"
+                  false
                 );
                 newCurrencyMap.set(currencyType, token);
                 availableCurrencies.push(currencyType);
